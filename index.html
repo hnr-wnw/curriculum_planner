@@ -232,11 +232,23 @@
     border:1px solid var(--baseline); border-radius:6px; background:var(--cell); color:var(--ink2); padding:1px 6px;
   }
 
-  /* ---------- empty state ---------- */
-  #empty {
-    margin:60px auto; max-width:480px; text-align:center; color:var(--ink2);
+  /* ---------- empty state / setup card ---------- */
+  #empty { margin:48px auto; max-width:640px; text-align:center; color:var(--ink2); }
+  #empty h2 { color:var(--ink); font-size:19px; margin-bottom:4px; }
+  .setupStep { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:26px 0 10px; }
+  .areaBtns { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; }
+  .areaBtns button, .lvlBtns button {
+    font:inherit; font-weight:600; cursor:pointer; color:var(--ink);
+    background:var(--cell); border:1.5px solid var(--baseline); border-radius:12px;
+    padding:12px 10px; box-shadow:var(--shadow);
   }
-  #empty h2 { color:var(--ink); font-size:18px; }
+  .areaBtns button:hover, .lvlBtns button:hover { border-color:var(--s1); }
+  .areaBtns button.on { border-color:var(--s1); background:color-mix(in srgb, var(--s1) 10%, var(--cell)); }
+  .areaBtns button .em { display:block; font-size:22px; margin-bottom:4px; }
+  .lvlBtns { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .lvlBtns button { padding:9px 14px; font-size:13px; }
+  .lvlGroupLabel { font-size:10.5px; color:var(--muted); margin:14px 0 6px; }
+  #loadLink { background:none; border:0; color:var(--s1); font:inherit; font-size:12.5px; cursor:pointer; text-decoration:underline; margin-top:26px; }
 
   /* ---------- custom piece form ---------- */
   #customForm { padding:2px 0 8px; display:flex; flex-direction:column; gap:6px; }
@@ -311,8 +323,10 @@
   <div id="gridWrap">
     <div id="empty">
       <h2>Start your plan</h2>
-      <p>Pick a <strong>learning area</strong> and <strong>level</strong> above. The achievement standards and content descriptions for that level will appear on the left as puzzle pieces — drag them into the grid.</p>
-      <p style="font-size:12px;color:var(--muted)">Cells hold as many pieces as you like. Not every content description has to be placed — but aim for at least one achievement standard per term. Nothing is stored in the browser: use <strong>Save</strong> to download your plan and <strong>Load</strong> to pick it up again.</p>
+      <p style="margin-top:0">Two picks and you're planning — the standards and content descriptions arrive as draggable puzzle pieces.</p>
+      <div id="setupSteps"></div>
+      <button id="loadLink">…or load a saved plan (.json)</button>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:18px">Nothing is stored in the browser — <strong>Save</strong> downloads your plan as a file, <strong>Load</strong> picks it up again.</p>
     </div>
     <div id="termTabs" hidden></div>
     <div id="grid" hidden></div>
@@ -413,11 +427,54 @@ for (const a of AREAS) areaSel.add(new Option(a.name, a.key));
 areaSel.onchange = () => {
   const grp = areaByKey(areaSel.value);
   levelSel.innerHTML = "";
-  if (!grp) { levelSel.disabled = true; levelSel.add(new Option("—","")); return; }
+  if (!grp) { levelSel.disabled = true; levelSel.add(new Option("—","")); renderEmpty(); return; }
   levelSel.disabled = false;
   levelSel.add(new Option("Choose level…",""));
   for (const l of levelsOf(grp)) levelSel.add(new Option(l,l));
+  renderEmpty();
 };
+
+/* ---------- guided setup card (shown while nothing is selected) ---------- */
+const AREA_EMOJI = { science:"🔬", humanities:"🌏", hpe:"🏃", english:"📖", maths:"🔢",
+  "tech:Digital Technologies":"💻", "tech:Design and Technologies":"🛠️" };
+function renderEmpty(){
+  const box = $("setupSteps");
+  if (!box || state) return;
+  box.innerHTML = "";
+  const step1 = document.createElement("div");
+  step1.innerHTML = `<div class="setupStep">Step 1 — what are you planning?</div>`;
+  const ab = document.createElement("div"); ab.className = "areaBtns";
+  for (const a of AREAS) {
+    const b = document.createElement("button");
+    b.innerHTML = `<span class="em">${AREA_EMOJI[a.key]||"📚"}</span>${esc(a.name)}`;
+    b.classList.toggle("on", areaSel.value === a.key);
+    b.onclick = () => { areaSel.value = a.key; areaSel.onchange(); };
+    ab.appendChild(b);
+  }
+  step1.appendChild(ab); box.appendChild(step1);
+  const grp = areaByKey(areaSel.value);
+  if (!grp) return;
+  const step2 = document.createElement("div");
+  step2.innerHTML = `<div class="setupStep">Step 2 — which level?</div>`;
+  const lvls = levelsOf(grp);
+  const main = lvls.filter(l => !l.startsWith("Foundation Level "));
+  const tf   = lvls.filter(l =>  l.startsWith("Foundation Level "));
+  const mkRow = (list, label) => {
+    if (!list.length) return;
+    if (label) { const h = document.createElement("div"); h.className = "lvlGroupLabel"; h.textContent = label; step2.appendChild(h); }
+    const row = document.createElement("div"); row.className = "lvlBtns";
+    for (const l of list) {
+      const b = document.createElement("button"); b.textContent = l;
+      b.onclick = () => { levelSel.value = l; levelSel.onchange(); };
+      row.appendChild(b);
+    }
+    step2.appendChild(row);
+  };
+  mkRow(main, tf.length ? "Foundation – Level 10" : "");
+  mkRow(tf, "Towards Foundation");
+  box.appendChild(step2);
+}
+$("loadLink").onclick = () => $("loadFile").click();
 levelSel.onchange = () => {
   if (!levelSel.value) return;
   if (state && state.placements.length &&
@@ -966,7 +1023,7 @@ let _rsz;
 window.addEventListener("resize", () => { clearTimeout(_rsz); _rsz = setTimeout(drawTreeEdges, 120); });
 
 /* ================= render ================= */
-function renderAll(){ renderCoverage(); renderTray(); renderGrid(); renderTree(); }
+function renderAll(){ renderCoverage(); renderTray(); renderGrid(); renderTree(); renderEmpty(); }
 renderAll();
 </script>
 </body>
